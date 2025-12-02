@@ -132,7 +132,7 @@ def train(args):
     
     # Curriculum Logic (Simple)
     # Start with open map
-    env_fn = lambda: RlEnv(gui=args.gui, output_dir=args.output_dir, map_type="open")
+    env_fn = lambda: RlEnv(gui=args.gui, output_dir=args.output_dir)
     
     # [수정] Monitor Wrapper가 커스텀 키워드를 기록하도록 설정
     env = make_vec_env(
@@ -187,7 +187,7 @@ def train(args):
     # Create a dummy env to visualize the final map
     # We need to close the vec_env first to free resources if needed, but it's fine.
     print("Saving final map...")
-    test_env = RlEnv(gui=False, output_dir=args.output_dir, map_type="open")
+    test_env = RlEnv(gui=False, output_dir=args.output_dir)
     obs, _ = test_env.reset()
     
     # Run a short episode with the trained model

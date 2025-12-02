@@ -9,13 +9,11 @@ from lidar import Standard2DLidar
 class RlEnv(gym.Env):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, gui=False, output_dir="outputs", map_type="open"):
+    def __init__(self, gui=False, output_dir="outputs"):
         super().__init__()
-        self.sim = SimEnv(gui=gui, map_type=map_type)
-        # 맵 크기를 30m로 확장해서, 환경 외벽(±15m 부근)까지 전역 맵에 포함되도록 함.
-        # 해상도(resolution)는 그대로 0.2m라서 에이전트가 보는 32x32 로컬 패치의
-        # 물리적 범위(약 6.4m)는 기존 학습과 동일하게 유지됨.
-        self.mapping = MappingSystem(map_size_meters=30.0, resolution=0.2, obs_size=32)
+        self.sim = SimEnv(gui=gui)
+        # 스케일 조정에 맞춰 전역 맵 크기를 22.5m로 축소
+        self.mapping = MappingSystem(map_size_meters=22.5, resolution=0.2, obs_size=32)
         self.lidar = None
         
         # Action Space: Discrete(5)
@@ -78,11 +76,7 @@ class RlEnv(gym.Env):
         self.episode_col_reward = 0.0
         self.episode_aux_reward = 0.0
         
-        # Curriculum or Map Type
-        if options and "map_type" in options:
-            self.sim.reset(map_type=options["map_type"])
-        else:
-            self.sim.reset()
+        self.sim.reset()
             
         self.mapping.reset()
         

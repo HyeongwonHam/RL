@@ -43,7 +43,7 @@ def replay(args):
     # 1. Create Env
     # Replay is usually single threaded and with GUI
     # We use DummyVecEnv for a single environment
-    env_fn = lambda: RlEnv(gui=args.gui, output_dir=out_dir, map_type=args.map_type)
+    env_fn = lambda: RlEnv(gui=args.gui, output_dir=out_dir)
     env = DummyVecEnv([env_fn])
     
     # 2. Load Normalization Stats
@@ -114,11 +114,10 @@ def replay(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_dir", type=str, default="output/PPO_V1")
+    parser.add_argument("--output_dir", type=str, default=None, help="Directory to save replay results (defaults to model directory)")
     parser.add_argument("--model_path", type=str, default=None, help="Path to the trained model zip file")
     parser.add_argument("--vec_norm_path", type=str, default=None, help="Path to the vec_normalize.pkl file")
     parser.add_argument("--gui", action="store_true", default=True, help="Enable GUI visualization")
-    parser.add_argument("--map_type", type=str, default="open", help="Map type: open or maze")
     parser.add_argument("--num_episodes", type=int, default=5, help="Number of episodes to replay")
     args = parser.parse_args()
     

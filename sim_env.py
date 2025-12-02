@@ -4,12 +4,11 @@ import numpy as np
 import math
 import random
 import os
-from environment_maze import MazeEnvManager
+from environment import MazeEnvManager, MAP_SCALE
 
 class SimEnv:
-    def __init__(self, gui=False, map_type="maze"):
+    def __init__(self, gui=False):
         self.gui = gui
-        self.map_type = map_type
         self.robot_id = None
         self.plane_id = None
         self.left_wheels = []
@@ -29,9 +28,9 @@ class SimEnv:
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.8)
         
-    def reset(self, map_type=None):
-        # map_type is ignored, always use maze
-        
+    def reset(self):
+        # 단일 Maze 환경만 지원
+
         p.resetSimulation()
         p.setGravity(0, 0, -9.8)
         
@@ -51,12 +50,13 @@ class SimEnv:
             
     def _randomize_robot_pose(self):
         # Try to find a collision-free pose
-        # We will try to spawn in a safe area (e.g. within -9 to 9)
+        # We will try to spawn in a safe area (스케일 축소에 맞춰 범위를 25% 줄임)
         # Since we don't have a direct "is_free" check easily without querying AABB,
         # we will just try random positions.
+        spawn_limit = 9.0 * MAP_SCALE
         for _ in range(100):
-            x = random.uniform(-9, 9)
-            y = random.uniform(-9, 9)
+            x = random.uniform(-spawn_limit, spawn_limit)
+            y = random.uniform(-spawn_limit, spawn_limit)
             # Random orientation
             yaw = random.uniform(-math.pi, math.pi)
             orn = p.getQuaternionFromEuler([0, 0, yaw])
