@@ -2,9 +2,8 @@ import random
 import pybullet as p
 import pybullet_data
 
-# 전체 맵 스케일을 25% 축소
+# 전체 맵 스케일을 
 MAP_SCALE = 0.75
-
 
 class EnvManager:
     def __init__(self, gui=True):
@@ -145,7 +144,7 @@ class EnvManager:
             populate_room(cfg["center"], cfg["size"], cfg["count"])
 
     def load_robot(self):
-        # R2D2 차동구동 로봇 로딩
+        # Load R2D2 Robot
         self.robot_id = p.loadURDF(
             "r2d2.urdf",
             [-2, -5, 0.2],
@@ -168,7 +167,6 @@ class EnvManager:
                 else:
                     fallback_wheels.append(j)
 
-        # 이름 기반이 없을 경우 fallback을 좌/우로 나눔
         if (not left_wheels or not right_wheels) and fallback_wheels:
             half = len(fallback_wheels) // 2
             left_wheels.extend(fallback_wheels[:half])
@@ -187,10 +185,6 @@ class EnvManager:
 
 
 class MazeEnvManager(EnvManager):
-    """
-    듬성듬성한 벽 구조를 갖는 미로 환경
-    (전체 맵 크기는 25% 축소된 버전을 사용).
-    """
 
     def create_house_map(self):
         self.plane_id = p.loadURDF("plane.urdf")

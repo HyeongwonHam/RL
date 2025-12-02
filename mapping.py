@@ -30,12 +30,7 @@ class MappingSystem:
         return new_cell
 
     def update_obstacle(self, hit_positions, max_range=8.0):
-        """
-        LiDAR에서 이미 계산된 월드 좌표 히트 지점들을 받아,
-        각 지점을 전역 그리드(obstacle_map)에 그대로 투영한다.
-        로봇의 yaw/각도 보정과 무관하게, PyBullet 월드 좌표계를
-        기준으로 장애물을 찍는 구조라 각도 보정 실수에 덜 민감하다.
-        """
+
         for hit in hit_positions:
             if hit is None:
                 continue

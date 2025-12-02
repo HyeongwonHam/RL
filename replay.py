@@ -5,9 +5,6 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecFrameStack
 from rl_env import RlEnv
-# CustomCNN is needed for loading the model. 
-# Since it's defined in main.py, we import it.
-# Ensure main.py doesn't run training code on import (it has if __name__ == "__main__")
 from main import CustomCNN
 
 def replay(args):
@@ -28,10 +25,6 @@ def replay(args):
 
     print(f"Loading model from {model_path}")
     
-    # Decide output directory:
-    # 1) 사용자가 --output_dir 를 명시하면 그대로 사용
-    # 2) 그렇지 않고 --model_path 를 준 경우, 그 모델이 있는 디렉토리에 저장
-    # 3) 둘 다 없으면 "outputs" 기본 디렉토리 사용
     if args.output_dir is not None and args.output_dir != "":
         out_dir = args.output_dir
     elif args.model_path is not None:
@@ -41,13 +34,10 @@ def replay(args):
     os.makedirs(out_dir, exist_ok=True)
     
     # 1. Create Env
-    # Replay is usually single threaded and with GUI
-    # We use DummyVecEnv for a single environment
     env_fn = lambda: RlEnv(gui=args.gui, output_dir=out_dir)
     env = DummyVecEnv([env_fn])
     
     # 2. Load Normalization Stats
-    # We must load the stats to match training distribution
     if os.path.exists(norm_path):
         print(f"Loading env stats from {norm_path}")
         env = VecNormalize.load(norm_path, env)
@@ -57,7 +47,6 @@ def replay(args):
         print(f"Warning: VecNormalize stats not found at {norm_path}. Performance might be degraded.")
         
     # 3. Frame Stack
-    # Must match training (n_stack=4)
     env = VecFrameStack(env, n_stack=4, channels_order='first')
     
     # 4. Load Model

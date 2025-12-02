@@ -12,7 +12,6 @@ class RlEnv(gym.Env):
     def __init__(self, gui=False, output_dir="outputs"):
         super().__init__()
         self.sim = SimEnv(gui=gui)
-        # 스케일 조정에 맞춰 전역 맵 크기를 22.5m로 축소
         self.mapping = MappingSystem(map_size_meters=22.5, resolution=0.2, obs_size=32)
         self.lidar = None
         
@@ -23,9 +22,6 @@ class RlEnv(gym.Env):
         # 3: Spin Left
         # 4: Spin Right
         self.action_space = spaces.Discrete(5)
-        # [속도 조정] 조금 더 적극적인 이동을 위해
-        # 선속도/각속도를 소폭 상향.
-        # v_fwd ~ 1.1 m/s 수준, 회전 속도도 약간 증가.
         self.v_fwd = 18.0
         self.w_turn = 35.0
         self.w_spin = 35.0
@@ -65,11 +61,11 @@ class RlEnv(gym.Env):
             visit_mask = self.mapping.visit_map > 0.5
             combined_map[visit_mask, 1] = 255
             
-            # PyBullet 월드 좌표계 기준으로 쌓인 전역 맵을
-            # 사람이 보기 편한 기준에 맞추기 위해
-            # 시계 방향으로 90도 회전하여 저장
-            rotated = np.rot90(combined_map, k=-1)  # k=-1 == 90deg clockwise
-            self.last_visit_map = rotated
+            # NumPy 행 인덱스(위->아래)와 PyBullet Y축(아래->위) 불일치를 보정
+            combined_map = np.flipud(combined_map)
+            
+            # 회전 없이 플립된 좌표계를 그대로 저장
+            self.last_visit_map = combined_map
         
         # Reward Logging Init
         self.episode_cov_reward = 0.0
@@ -94,11 +90,6 @@ class RlEnv(gym.Env):
     def step(self, action):
         v, w = self.actions[int(action)]
         
-        # [수정] Differential Drive Kinematics 적용
-        # v, w를 좌우 바퀴 속도로 변환해야 함
-        # v = (vr + vl) / 2, w = (vr - vl) / L
-        # vl = v - (w * L / 2)
-        # vr = v + (w * L / 2)
         
         L = self.sim.track_width
         vl = v - (w * L) / 2
@@ -107,9 +98,7 @@ class RlEnv(gym.Env):
         # [수정] 로봇의 모터가 반대로 설정되어 있어(Positive=Backward), 부호를 반전시켜 전달함
         # 이렇게 하면 Positive v -> Negative Motor -> Forward Movement가 됨
         # 회전 방향도 자연스럽게 맞게 됨
-        
-        # Simulation Step
-        # Repeat action for stability
+
         for _ in range(3):
             self.sim.step(-vl, -vr)
             
@@ -206,13 +195,10 @@ class RlEnv(gym.Env):
         cv2.waitKey(1)
 
     def _get_obs(self):
-        # GUI 모드일 때만 라이다 시각화 (초록/연두색 선)
         dists, _, _, _ = self.lidar.scan(visualize=self.sim.gui)
         angles = self.lidar.ray_angles
-        
         # 1. Ego Map
         ego_map = self.mapping.lidar_to_egomap(dists, angles, max_range=6.0)
-        
         # 2. Visit Map
         pos, yaw, _, _ = self.sim.get_robot_state()
         visit_map = self.mapping.get_local_visit_map(pos, yaw, max_range=6.0)
