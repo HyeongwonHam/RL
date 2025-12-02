@@ -53,31 +53,26 @@ class Standard2DLidar:
         
         distances = []
         hit_ids = []
-        hit_positions = []
         
         for i, res in enumerate(results):
             hit_id = res[0]       # 부딪힌 물체의 ID
             hit_fraction = res[2] # 거리 비율 (0~1)
-            hit_pos_world = res[3]  # 월드 좌표계에서의 히트 위치 (x, y, z)
 
             # 로봇 자기 몸체를 찍은 경우는 장애물로 취급하지 않음
             if hit_id == self.robot_id:
                 hit_id = -1
                 hit_fraction = 1.0
-                hit_pos_world = None
             
             if hit_fraction < 0.001:
                 hit_id = -1
                 hit_fraction = 1.0
-                hit_pos_world = None
 
             if hit_id != -1:
-                
+                # start_offset 이후 구간의 길이를 이용해 거리 근사
                 ray_len = self.max_range - start_offset
                 dist_from_start = hit_fraction * ray_len
                 true_dist = start_offset + dist_from_start
 
-                
                 # 노이즈 추가
                 if self.noise_std > 0:
                     dist = true_dist + random.gauss(0, self.noise_std)
@@ -87,36 +82,34 @@ class Standard2DLidar:
                 # 거리가 0보다 작아지지 않게 클리핑
                 final_dist = max(0.0, min(dist, self.max_range))
                 distances.append(final_dist)
-                hit_positions.append(hit_pos_world)
                 
                 if visualize:
                     if i % 5 == 0:
                         # 부딪힌 지점 계산 (시각화용)
                         hit_pos = [
-                            start_pos[0] + (ray_tos[i][0] - start_pos[0]) * hit_fraction,
-                            start_pos[1] + (ray_tos[i][1] - start_pos[1]) * hit_fraction,
-                            start_pos[2] + (ray_tos[i][2] - start_pos[2]) * hit_fraction
+                            ray_froms[i][0] + (ray_tos[i][0] - ray_froms[i][0]) * hit_fraction,
+                            ray_froms[i][1] + (ray_tos[i][1] - ray_froms[i][1]) * hit_fraction,
+                            ray_froms[i][2] + (ray_tos[i][2] - ray_froms[i][2]) * hit_fraction
                         ]
-                        self._draw_line(i, start_pos, hit_pos, [1, 0, 0]) # 빨강: 충돌
+                        self._draw_line(i, ray_froms[i], hit_pos, [1, 0, 0]) # 빨강: 충돌
 
                     if abs(self.ray_angles[i]) < 0.05:
                         hit_pos = [
-                            start_pos[0] + (ray_tos[i][0] - start_pos[0]) * hit_fraction,
-                            start_pos[1] + (ray_tos[i][1] - start_pos[1]) * hit_fraction,
-                            start_pos[2] + (ray_tos[i][2] - start_pos[2]) * hit_fraction
+                            ray_froms[i][0] + (ray_tos[i][0] - ray_froms[i][0]) * hit_fraction,
+                            ray_froms[i][1] + (ray_tos[i][1] - ray_froms[i][1]) * hit_fraction,
+                            ray_froms[i][2] + (ray_tos[i][2] - ray_froms[i][2]) * hit_fraction
                         ]
-                        self._draw_line(i, start_pos, hit_pos, [0, 0, 1])
+                        self._draw_line(i, ray_froms[i], hit_pos, [0, 0, 1])
 
             else:
                 distances.append(self.max_range)
-                hit_positions.append(None)
                 if visualize:
                     if i % 5 == 0:
-                        self._draw_line(i, start_pos, ray_tos[i], [0, 1, 0]) 
+                        self._draw_line(i, ray_froms[i], ray_tos[i], [0, 1, 0]) 
             
             hit_ids.append(hit_id)
         
-        return np.array(distances, dtype=np.float32), self.ray_angles, hit_ids, hit_positions
+        return np.array(distances, dtype=np.float32), self.ray_angles, hit_ids
 
     def _draw_line(self, idx, start, end, color):
         if self.debug_line_ids[idx] is None:

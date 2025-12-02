@@ -110,9 +110,9 @@ class RlEnv(gym.Env):
         # Update Map
         new_cell = self.mapping.update_visit(pos)
         
-        # Update Obstacle Map (LiDAR가 준 월드 좌표 hit 포인트를 그대로 사용)
-        dists, _, hit_ids, hit_positions = self.lidar.scan()
-        self.mapping.update_obstacle(hit_positions, max_range=6.0)
+        # Update Obstacle Map (pose + LiDAR 거리/각도 기반으로 엔드포인트 추정)
+        dists, angles, hit_ids = self.lidar.scan()
+        self.mapping.update_obstacle(pos, yaw, dists, angles, max_range=6.0)
         
         # Reward Calculation
         reward = 0.0
@@ -130,7 +130,7 @@ class RlEnv(gym.Env):
             
         # 3. Auxiliary Rewards
         # Safety (가장 가까운 장애물까지 거리)
-        dists, _, _, _ = self.lidar.scan()
+        dists, _, _ = self.lidar.scan()
         min_dist = np.min(dists) if len(dists) > 0 else 0.0
         safety_factor = np.clip((min_dist - 0.2) / 0.4, 0.0, 1.0)
         
@@ -195,8 +195,7 @@ class RlEnv(gym.Env):
         cv2.waitKey(1)
 
     def _get_obs(self):
-        dists, _, _, _ = self.lidar.scan(visualize=self.sim.gui)
-        angles = self.lidar.ray_angles
+        dists, angles, _ = self.lidar.scan(visualize=self.sim.gui)
         # 1. Ego Map
         ego_map = self.mapping.lidar_to_egomap(dists, angles, max_range=6.0)
         # 2. Visit Map

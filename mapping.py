@@ -29,12 +29,23 @@ class MappingSystem:
                 new_cell = True
         return new_cell
 
-    def update_obstacle(self, hit_positions, max_range=8.0):
+    def update_obstacle(self, robot_pos, robot_yaw, dists, angles, max_range=8.0):
+        """
+        LiDAR 거리/각도와 로봇 pose만을 사용해 전역 장애물 맵을 갱신한다.
+        PyBullet가 제공하는 hit 좌표는 사용하지 않고,
+        pose + range로 추정한 엔드포인트를 grid에 투영하는 구조.
+        """
+        angle_correction = math.pi / 2.0  # LiDAR에서 사용한 eye 방향 보정과 일치
 
-        for hit in hit_positions:
-            if hit is None:
+        for r, theta in zip(dists, angles):
+            # 최대 거리(혹은 그 이상)는 히트가 없다고 간주
+            if r >= max_range:
                 continue
-            ox_m, oy_m, _ = hit
+
+            global_theta = robot_yaw + theta + angle_correction
+
+            ox_m = robot_pos[0] + r * np.cos(global_theta)
+            oy_m = robot_pos[1] + r * np.sin(global_theta)
 
             gx = int((ox_m + self.map_size_meters / 2) / self.resolution)
             gy = int((oy_m + self.map_size_meters / 2) / self.resolution)
