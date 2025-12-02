@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# VSCode
+.vscode/
+
+# Backup files
+backup/
+*.bak
+*.backup
+*~
+
+# Markdown files
+*.md
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# OS files
+.DS_Store
+Thumbs.db
