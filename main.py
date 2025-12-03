@@ -27,10 +27,10 @@ LOG_FILE = "training_log.csv"
 GAMMA = 0.99 
 N_STEPS = 4096 
 BATCH_SIZE = 512 
-LR = 5e-5 
-ENT_COEF = 0.01
-CLIP_RANGE = 0.1 
-N_EPOCHS = 4 
+LR = 1e-4 
+ENT_COEF = 0.025
+CLIP_RANGE = 0.15
+N_EPOCHS = 5 
 TARGET_KL = 0.03 
 
 def reseed(seed: int = None) -> int:
@@ -180,8 +180,8 @@ def train(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", type=str, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--total_timesteps", type=int, default=20_000_000)
-    parser.add_argument("--num_envs", type=int, default=1) 
+    parser.add_argument("--total_timesteps", type=int, default=15_000_000)
+    parser.add_argument("--num_envs", type=int, default=6) 
     parser.add_argument("--gui", action="store_true")
     parser.add_argument("--tb_log", type=str, default=None)
     return parser.parse_args()

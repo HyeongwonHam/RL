@@ -67,6 +67,8 @@ class Standard2DLidar:
                 hit_id = -1
                 hit_fraction = 1.0
 
+            hit_pos_vis = None
+
             if hit_id != -1:
                 # start_offset 이후 구간의 길이를 이용해 거리 근사
                 ray_len = self.max_range - start_offset
@@ -82,30 +84,31 @@ class Standard2DLidar:
                 # 거리가 0보다 작아지지 않게 클리핑
                 final_dist = max(0.0, min(dist, self.max_range))
                 distances.append(final_dist)
-                
-                if visualize:
-                    if i % 5 == 0:
-                        # 부딪힌 지점 계산 (시각화용)
-                        hit_pos = [
-                            ray_froms[i][0] + (ray_tos[i][0] - ray_froms[i][0]) * hit_fraction,
-                            ray_froms[i][1] + (ray_tos[i][1] - ray_froms[i][1]) * hit_fraction,
-                            ray_froms[i][2] + (ray_tos[i][2] - ray_froms[i][2]) * hit_fraction
-                        ]
-                        self._draw_line(i, ray_froms[i], hit_pos, [1, 0, 0]) # 빨강: 충돌
 
-                    if abs(self.ray_angles[i]) < 0.05:
-                        hit_pos = [
-                            ray_froms[i][0] + (ray_tos[i][0] - ray_froms[i][0]) * hit_fraction,
-                            ray_froms[i][1] + (ray_tos[i][1] - ray_froms[i][1]) * hit_fraction,
-                            ray_froms[i][2] + (ray_tos[i][2] - ray_froms[i][2]) * hit_fraction
-                        ]
-                        self._draw_line(i, ray_froms[i], hit_pos, [0, 0, 1])
+                if visualize:
+                    # 부딪힌 지점 계산 (시각화용)
+                    hit_pos_vis = [
+                        ray_froms[i][0] + (ray_tos[i][0] - ray_froms[i][0]) * hit_fraction,
+                        ray_froms[i][1] + (ray_tos[i][1] - ray_froms[i][1]) * hit_fraction,
+                        ray_froms[i][2] + (ray_tos[i][2] - ray_froms[i][2]) * hit_fraction
+                    ]
+                    if i % 5 == 0:
+                        # 빨강: 충돌 레이 (샘플링)
+                        self._draw_line(i, ray_froms[i], hit_pos_vis, [1, 0, 0])
 
             else:
                 distances.append(self.max_range)
                 if visualize:
                     if i % 5 == 0:
                         self._draw_line(i, ray_froms[i], ray_tos[i], [0, 1, 0]) 
+
+            # 정면(0도) ray는 항상 파랑색으로 그려서 시각적으로 위치가 어긋나 보이지 않도록 함
+            if visualize and abs(self.ray_angles[i]) < 0.05:
+                if hit_id != -1 and hit_pos_vis is not None:
+                    end = hit_pos_vis
+                else:
+                    end = ray_tos[i]
+                self._draw_line(i, ray_froms[i], end, [0, 0, 1])
             
             hit_ids.append(hit_id)
         

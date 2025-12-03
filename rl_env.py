@@ -41,6 +41,10 @@ class RlEnv(gym.Env):
         self.max_steps = 5000
         self.steps = 0
         self.last_visit_map = None
+        # 연속적으로 정보를 얻지 못한 스텝 수 (frontier 탐색 보조용)
+        self.no_info_steps = 0
+        # 리플레이용 로봇 궤적 기록 (grid 좌표 리스트)
+        self.path_points = []
         
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -56,10 +60,15 @@ class RlEnv(gym.Env):
             if self.mapping.obstacle_map is not None:
                 obs_mask = self.mapping.obstacle_map > 0.5
                 combined_map[obs_mask] = [255, 255, 255]
-            
-            # Visited (Green)
-            visit_mask = self.mapping.visit_map > 0.5
-            combined_map[visit_mask, 1] = 255
+
+            # 로봇 궤적만 얇은 초록 선으로 표시 (path_points는 grid 좌표)
+            if self.path_points:
+                for i in range(1, len(self.path_points)):
+                    y0, x0 = self.path_points[i - 1]
+                    y1, x1 = self.path_points[i]
+                    if 0 <= x0 < w and 0 <= y0 < h and 0 <= x1 < w and 0 <= y1 < h:
+                        # BGR에서 G 채널만 올려 얇은 초록 선을 그림
+                        cv2.line(combined_map, (x0, y0), (x1, y1), (0, 255, 0), 1)
             
             # NumPy 행 인덱스(위->아래)와 PyBullet Y축(아래->위) 불일치를 보정
             combined_map = np.flipud(combined_map)
@@ -71,6 +80,8 @@ class RlEnv(gym.Env):
         self.episode_cov_reward = 0.0
         self.episode_col_reward = 0.0
         self.episode_aux_reward = 0.0
+        self.no_info_steps = 0
+        self.path_points = []
         
         self.sim.reset()
             
@@ -106,29 +117,42 @@ class RlEnv(gym.Env):
         
         # Get State
         pos, yaw, collision, fallen = self.sim.get_robot_state()
+
+        # 로봇 궤적 기록 (grid 좌표로 변환하여 저장)
+        gx = int((pos[0] + self.mapping.map_size_meters / 2) / self.mapping.resolution)
+        gy = int((pos[1] + self.mapping.map_size_meters / 2) / self.mapping.resolution)
+        if 0 <= gx < self.mapping.grid_size and 0 <= gy < self.mapping.grid_size:
+            self.path_points.append((gy, gx))
         
-        # Update Map
-        new_cell = self.mapping.update_visit(pos)
-        
-        # Update Obstacle Map (pose + LiDAR 거리/각도 기반으로 엔드포인트 추정)
+        # Update Map: pose + LiDAR로 occupancy 갱신, 새로 관측된 셀 수 반환
         dists, angles, hit_ids = self.lidar.scan()
-        self.mapping.update_obstacle(pos, yaw, dists, angles, max_range=6.0)
+        new_cells = self.mapping.update_obstacle(pos, yaw, dists, angles, max_range=6.0)
         
         # Reward Calculation
         reward = 0.0
         terminated = False
         truncated = False
         
-        # 1. Coverage Reward (Primary) - 새 셀을 많이 방문하도록 가중치 상향
-        if new_cell:
-            reward += 1.5
+        # 1. Coverage Reward (Primary) - 새로 관측된 셀 수에 비례
+        if new_cells > 0:
+            reward += 0.1 * new_cells
+            self.no_info_steps = 0
+        else:
+            # frontier에서 멀어져 정보가 없는 구간만 탐색하는 것을 억제
+            self.no_info_steps += 1
+            # 즉시 소량의 패널티로 "정보 없는 이동"을 덜 선호하게 함
+            reward -= 0.01
             
         # 2. Collision Penalty (Critical)
         if collision or fallen:
             reward -= 8.0
             terminated = True
             
-        # 3. Auxiliary Rewards
+        # 3. Frontier Penalty (정보를 얻지 못한 상태가 오래 지속될 때 추가 패널티)
+        if self.no_info_steps >= 10:
+            reward -= 0.02
+
+        # 4. Auxiliary Rewards
         # Safety (가장 가까운 장애물까지 거리)
         dists, _, _ = self.lidar.scan()
         min_dist = np.min(dists) if len(dists) > 0 else 0.0
@@ -145,7 +169,7 @@ class RlEnv(gym.Env):
             truncated = True
 
         # Update Cumulative Rewards (Always add current step's contribution)
-        self.episode_cov_reward += (1.5 if new_cell else 0.0)
+        self.episode_cov_reward += (0.1 * new_cells)
         self.episode_col_reward += (-8.0 if (collision or fallen) else 0.0)
         self.episode_aux_reward += (0.1 * vel_factor * safety_factor)
         

@@ -8,16 +8,27 @@ from rl_env import RlEnv
 from main import CustomCNN
 
 def replay(args):
-    # Determine paths
+    # 0. 기준이 되는 러닝 디렉토리 결정
+    # 우선순위: run_dir 인자 > output_dir > model_path의 디렉토리 > "outputs"
+    if args.run_dir is not None and args.run_dir != "":
+        base_dir = args.run_dir
+    elif args.output_dir is not None and args.output_dir != "":
+        base_dir = args.output_dir
+    elif args.model_path is not None:
+        base_dir = os.path.dirname(os.path.abspath(args.model_path))
+    else:
+        base_dir = "outputs"
+
+    # 1. 모델 / 정규화 경로 결정
     if args.model_path:
         model_path = args.model_path
     else:
-        model_path = os.path.join(args.output_dir, "ppo.zip")
+        model_path = os.path.join(base_dir, "ppo.zip")
 
     if args.vec_norm_path:
         norm_path = args.vec_norm_path
     else:
-        norm_path = os.path.join(args.output_dir, "vec_normalize.pkl")
+        norm_path = os.path.join(base_dir, "vec_normalize.pkl")
     
     if not os.path.exists(model_path):
         print(f"Error: Model not found at {model_path}")
@@ -25,12 +36,11 @@ def replay(args):
 
     print(f"Loading model from {model_path}")
     
+    # 2. 출력 디렉토리 결정: 명시된 output_dir가 있으면 사용, 아니면 base_dir 사용
     if args.output_dir is not None and args.output_dir != "":
         out_dir = args.output_dir
-    elif args.model_path is not None:
-        out_dir = os.path.dirname(os.path.abspath(model_path))
     else:
-        out_dir = "outputs"
+        out_dir = base_dir
     os.makedirs(out_dir, exist_ok=True)
     
     # 1. Create Env
@@ -103,6 +113,8 @@ def replay(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    # 가장 흔한 사용 패턴: python replay.py output/PPO_V5
+    parser.add_argument("run_dir", nargs="?", default=None, help="훈련 결과 디렉토리 (예: output/PPO_V5)")
     parser.add_argument("--output_dir", type=str, default=None, help="Directory to save replay results (defaults to model directory)")
     parser.add_argument("--model_path", type=str, default=None, help="Path to the trained model zip file")
     parser.add_argument("--vec_norm_path", type=str, default=None, help="Path to the vec_normalize.pkl file")
