@@ -100,3 +100,17 @@ class SimEnv:
             fallen = True
             
         return pos, yaw, collision, fallen
+
+    def close(self):
+        # MazeEnvManager는 EnvManager를 상속하므로 close()에서 pybullet disconnect를 호출함
+        if self.maze_manager is not None:
+            try:
+                self.maze_manager.close()
+            except Exception:
+                pass
+            self.maze_manager = None
+        else:
+            try:
+                p.disconnect()
+            except Exception:
+                pass
