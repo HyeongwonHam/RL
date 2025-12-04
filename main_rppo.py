@@ -1,9 +1,7 @@
 import argparse
 import os
-import random
 import csv
 from collections import deque
-from multiprocessing import Process, Pipe
 
 import numpy as np
 import torch
@@ -11,35 +9,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from rl_env import RlEnv
+from main import (
+    SubprocEnvPool,
+    RewardNormalizer,
+    reseed,
+    FIXED_SEED,
+    DEFAULT_OUTPUT_DIR,
+    LOG_FILE,
+    GAMMA,
+    GAE_LAMBDA,
+    N_STEPS,
+    BATCH_SIZE,
+    LR,
+    ENT_COEF,
+    CLIP_RANGE,
+    N_EPOCHS,
+    TARGET_KL,
+    N_STACK,
+    MAX_GRAD_NORM,
+)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-FIXED_SEED = 42
-DEFAULT_OUTPUT_DIR = "outputs"
-POLICY_MODEL_FILE = "ppo"
-LOG_FILE = "training_log.csv"
-
-GAMMA = 0.99
-GAE_LAMBDA = 0.95
-N_STEPS = 4096
-BATCH_SIZE = 512
-LR = 1e-4
-ENT_COEF = 0.025
-CLIP_RANGE = 0.15
-N_EPOCHS = 5
-TARGET_KL = 0.03
-N_STACK = 4
-MAX_GRAD_NORM = 0.5
-CLIP_REWARD = 10.0
-
-
-def reseed(seed: int = None) -> int:
-    if seed is None:
-        seed = random.randint(0, 10_000_000)
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    return seed
+POLICY_MODEL_FILE = "rppo"
 
 
 class CustomCNN(nn.Module):
@@ -66,37 +58,62 @@ class CustomCNN(nn.Module):
         return self.linear(self.cnn(x))
 
 
-class PPOPolicy(nn.Module):
-    def __init__(self, n_input_channels: int, n_actions: int, features_dim: int = 512):
+class RecurrentPPOPolicy(nn.Module):
+    def __init__(self, n_input_channels: int, n_actions: int, features_dim: int = 512, hidden_dim: int = 256):
         super().__init__()
+        self.n_actions = n_actions
         self.features = CustomCNN(n_input_channels, features_dim=features_dim)
+        self.gru_cell = nn.GRUCell(features_dim, hidden_dim)
         self.pi = nn.Sequential(
-            nn.Linear(features_dim, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(hidden_dim, 512),
             nn.ReLU(),
             nn.Linear(512, n_actions),
         )
         self.vf = nn.Sequential(
-            nn.Linear(features_dim, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(hidden_dim, 512),
             nn.ReLU(),
             nn.Linear(512, 1),
         )
+        self.hidden_dim = hidden_dim
 
-    def forward(self, x: torch.Tensor):
-        feats = self.features(x)
-        logits = self.pi(feats)
-        value = self.vf(feats).squeeze(-1)
-        return logits, value
+    def act(self, obs: torch.Tensor, hidden: torch.Tensor):
+        feats = self.features(obs)
+        new_hidden = self.gru_cell(feats, hidden)
+        logits = self.pi(new_hidden)
+        dist = torch.distributions.Categorical(logits=logits)
+        actions = dist.sample()
+        logprobs = dist.log_prob(actions)
+        values = self.vf(new_hidden).squeeze(-1)
+        return actions, logprobs, values, new_hidden
 
+    def evaluate_rollout(self, obs_batch: np.ndarray, actions_batch: np.ndarray, dones_batch: np.ndarray, device):
+        T, num_envs, c, h, w = obs_batch.shape
+        obs_tensor = torch.from_numpy(obs_batch.reshape(T * num_envs, c, h, w)).to(device=device, dtype=torch.float32)
+        with torch.no_grad():
+            feats_flat = self.features(obs_tensor)
+        feats = feats_flat.view(T, num_envs, -1)
 
-def make_envs(num_envs: int, gui: bool, output_dir: str):
-    envs = []
-    for _ in range(num_envs):
-        envs.append(RlEnv(gui=gui, output_dir=output_dir))
-    return envs
+        dones_tensor = torch.from_numpy(dones_batch.astype(np.float32)).to(device=device)
+
+        h_t = torch.zeros(num_envs, self.hidden_dim, device=device)
+        hidden_seq = []
+        for t in range(T):
+            h_t = self.gru_cell(feats[t], h_t)
+            hidden_seq.append(h_t)
+            done_mask = dones_tensor[t].unsqueeze(-1)
+            h_t = h_t * (1.0 - done_mask)
+        hidden_seq = torch.stack(hidden_seq, dim=0)
+
+        hidden_flat = hidden_seq.reshape(T * num_envs, self.hidden_dim)
+        logits_flat = self.pi(hidden_flat)
+        values_flat = self.vf(hidden_flat).squeeze(-1)
+
+        actions_flat = torch.from_numpy(actions_batch.reshape(T * num_envs)).to(device=device)
+        dist = torch.distributions.Categorical(logits=logits_flat)
+        logprobs_flat = dist.log_prob(actions_flat)
+        entropy_flat = dist.entropy()
+
+        return logprobs_flat, values_flat, entropy_flat
 
 
 def init_frame_stacks(initial_obs_list, n_stack: int):
@@ -118,114 +135,6 @@ def get_stacked_obs(frame_stacks):
     return np.stack(stacked, axis=0)
 
 
-class SubprocEnvPool:
-    def __init__(self, num_envs: int, gui: bool, output_dir: str):
-        self.num_envs = num_envs
-        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(num_envs)])
-        self.processes = []
-        for idx, (work_remote, remote) in enumerate(zip(self.work_remotes, self.remotes)):
-            p = Process(target=self._worker, args=(idx, work_remote, remote, gui, output_dir))
-            p.daemon = True
-            p.start()
-            work_remote.close()
-            self.processes.append(p)
-
-    @staticmethod
-    def _worker(worker_id: int, remote, parent_remote, gui, output_dir):
-        parent_remote.close()
-        # 워커별로 다른 시드를 사용해 맵/초기 위치가 서로 다르게 생성되도록 함
-        reseed(FIXED_SEED + worker_id + 1)
-        env = RlEnv(gui=gui, output_dir=output_dir)
-        try:
-            while True:
-                cmd, data = remote.recv()
-                if cmd == "reset":
-                    obs, info = env.reset()
-                    remote.send((obs, info))
-                elif cmd == "step":
-                    action = data
-                    result = env.step(action)
-                    remote.send(result)
-                elif cmd == "close":
-                    env.close()
-                    remote.close()
-                    break
-                else:
-                    raise RuntimeError(f"Unknown command: {cmd}")
-        except KeyboardInterrupt:
-            env.close()
-
-    def reset(self):
-        for remote in self.remotes:
-            remote.send(("reset", None))
-        results = [remote.recv() for remote in self.remotes]
-        obs_list, info_list = zip(*results)
-        return list(obs_list), list(info_list)
-
-    def reset_env(self, idx: int):
-        remote = self.remotes[idx]
-        remote.send(("reset", None))
-        obs, info = remote.recv()
-        return obs, info
-
-    def step(self, actions: np.ndarray):
-        for remote, action in zip(self.remotes, actions):
-            remote.send(("step", int(action)))
-        results = [remote.recv() for remote in self.remotes]
-        return results
-
-    def close(self):
-        for remote in self.remotes:
-            try:
-                remote.send(("close", None))
-            except Exception:
-                pass
-        for p in self.processes:
-            p.join(timeout=1.0)
-
-
-class RewardNormalizer:
-    def __init__(self, num_envs: int, gamma: float = GAMMA, clip_reward: float = CLIP_REWARD):
-        self.mean = 0.0
-        self.var = 1.0
-        self.count = 1e-8
-        self.clip_reward = clip_reward
-        self.gamma = gamma
-        self.ret = np.zeros(num_envs, dtype=np.float32)
-
-    def update(self, x: np.ndarray):
-        if x.size == 0:
-            return
-        batch_mean = float(x.mean())
-        batch_var = float(x.var())
-        batch_count = x.size
-
-        delta = batch_mean - self.mean
-        tot_count = self.count + batch_count
-
-        new_mean = self.mean + delta * batch_count / tot_count
-
-        m_a = self.var * self.count
-        m_b = batch_var * batch_count
-        new_var = (m_a + m_b + delta * delta * self.count * batch_count / tot_count) / tot_count
-
-        self.mean = new_mean
-        self.var = new_var
-        self.count = tot_count
-
-    def normalize(self, rewards: np.ndarray, dones: np.ndarray) -> np.ndarray:
-        # VecNormalize 스타일: discounted return을 추적하여 그 분산으로 reward를 정규화
-        done_mask = dones.astype(np.float32)
-        # ret_t = (ret_{t-1} * gamma + r_t) for ongoing episodes, else r_t for new ones
-        self.ret = self.ret * self.gamma * (1.0 - done_mask) + rewards
-        self.update(self.ret)
-        std = float(np.sqrt(self.var) + 1e-8)
-        y = rewards / std
-        if self.clip_reward is not None:
-            y = np.clip(y, -self.clip_reward, self.clip_reward)
-        return y.astype(np.float32)
-
-
 def train(args):
     os.makedirs(args.output_dir, exist_ok=True)
     reseed(FIXED_SEED)
@@ -241,7 +150,9 @@ def train(args):
     base_channels = obs_shape[0]
     n_actions = 5
 
-    policy = PPOPolicy(n_input_channels=base_channels * N_STACK, n_actions=n_actions, features_dim=512).to(device)
+    policy = RecurrentPPOPolicy(n_input_channels=base_channels * N_STACK, n_actions=n_actions, features_dim=512).to(
+        device
+    )
     optimizer = torch.optim.Adam(policy.parameters(), lr=LR, eps=1e-5)
 
     csv_path = os.path.join(args.output_dir, LOG_FILE)
@@ -271,6 +182,8 @@ def train(args):
     num_updates = args.total_timesteps // total_steps_per_update
     global_step = 0
 
+    hidden = torch.zeros(num_envs, policy.hidden_dim, device=device)
+
     for update in range(num_updates):
         obs_batch = []
         actions_batch = []
@@ -285,10 +198,8 @@ def train(args):
             obs_tensor = torch.from_numpy(stacked_obs).to(device=device, dtype=torch.float32)
 
             with torch.no_grad():
-                logits, values = policy(obs_tensor)
-                dist = torch.distributions.Categorical(logits=logits)
-                actions = dist.sample()
-                logprobs = dist.log_prob(actions)
+                actions, logprobs, values, new_hidden = policy.act(obs_tensor, hidden)
+            hidden = new_hidden
 
             actions_np = actions.cpu().numpy()
 
@@ -317,6 +228,7 @@ def train(args):
                             ep_len_buffer.pop(0)
                     ep_returns[i] = 0.0
                     ep_lengths[i] = 0
+                    hidden[i] = 0.0
                     next_obs, _ = env_pool.reset_env(i)
 
                 frame_stacks[i].append(next_obs)
@@ -332,15 +244,15 @@ def train(args):
             logprobs_batch.append(logprobs.cpu().numpy())
             rewards_batch.append(norm_rewards)
             raw_rewards_batch.append(step_raw_rewards_arr)
-            dones_batch.append(np.array(step_dones, dtype=np.bool_))
+            dones_batch.append(step_dones_arr)
             values_batch.append(values.cpu().numpy())
 
             global_step += num_envs
 
         with torch.no_grad():
             stacked_obs = get_stacked_obs(frame_stacks)
-            next_obs_tensor = torch.from_numpy(stacked_obs).to(device=device, dtype=torch.float32)
-            _, next_values = policy(next_obs_tensor)
+            obs_tensor = torch.from_numpy(stacked_obs).to(device=device, dtype=torch.float32)
+            _, _, next_values, _ = policy.act(obs_tensor, hidden)
             next_values = next_values.cpu().numpy()
 
         obs_batch = np.asarray(obs_batch, dtype=np.float32)
@@ -364,63 +276,46 @@ def train(args):
             advantages[t] = lastgaelam
         returns = advantages + values_batch
 
-        b_obs = torch.from_numpy(obs_batch.reshape(-1, base_channels * N_STACK, obs_shape[1], obs_shape[2])).to(
-            device=device, dtype=torch.float32
-        )
-        b_actions = torch.from_numpy(actions_batch.reshape(-1)).to(device=device)
-        b_logprobs = torch.from_numpy(logprobs_batch.reshape(-1)).to(device=device)
+        b_logprobs_old = torch.from_numpy(logprobs_batch.reshape(-1)).to(device=device)
         b_advantages = torch.from_numpy(advantages.reshape(-1)).to(device=device)
         b_returns = torch.from_numpy(returns.reshape(-1)).to(device=device)
-        b_values = torch.from_numpy(values_batch.reshape(-1)).to(device=device)
 
         b_advantages = (b_advantages - b_advantages.mean()) / (b_advantages.std() + 1e-8)
 
-        batch_size = b_obs.shape[0]
-        inds = np.arange(batch_size)
-
         for epoch in range(N_EPOCHS):
-            np.random.shuffle(inds)
-            for start in range(0, batch_size, BATCH_SIZE):
-                end = start + BATCH_SIZE
-                mb_inds = inds[start:end]
+            new_logprobs_flat, new_values_flat, entropy_flat = policy.evaluate_rollout(
+                obs_batch, actions_batch, dones_batch, device
+            )
 
-                mb_obs = b_obs[mb_inds]
-                mb_actions = b_actions[mb_inds]
-                mb_logprobs_old = b_logprobs[mb_inds]
-                mb_advantages = b_advantages[mb_inds]
-                mb_returns = b_returns[mb_inds]
-                mb_values_old = b_values[mb_inds]
+            values = new_values_flat
+            logprobs = new_logprobs_flat
+            entropy = entropy_flat.mean()
 
-                logits, values = policy(mb_obs)
-                dist = torch.distributions.Categorical(logits=logits)
-                logprobs = dist.log_prob(mb_actions)
-                entropy = dist.entropy().mean()
+            ratios = torch.exp(logprobs - b_logprobs_old)
+            surr1 = ratios * b_advantages
+            surr2 = torch.clamp(ratios, 1.0 - CLIP_RANGE, 1.0 + CLIP_RANGE) * b_advantages
+            policy_loss = -torch.min(surr1, surr2).mean()
 
-                ratios = torch.exp(logprobs - mb_logprobs_old)
-                surr1 = ratios * mb_advantages
-                surr2 = torch.clamp(ratios, 1.0 - CLIP_RANGE, 1.0 + CLIP_RANGE) * mb_advantages
-                policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = F.mse_loss(values, b_returns)
 
-                value_loss = F.mse_loss(values, mb_returns)
+            loss = policy_loss + 0.5 * value_loss - ENT_COEF * entropy
 
-                loss = policy_loss + 0.5 * value_loss - ENT_COEF * entropy
+            optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(policy.parameters(), MAX_GRAD_NORM)
+            optimizer.step()
 
-                optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(policy.parameters(), MAX_GRAD_NORM)
-                optimizer.step()
+            with torch.no_grad():
+                log_ratio = logprobs - b_logprobs_old
+                approx_kl = ((torch.exp(log_ratio) - 1) - log_ratio).mean().item()
+            if approx_kl > 1.5 * TARGET_KL:
+                break
 
-                with torch.no_grad():
-                    log_ratio = logprobs - mb_logprobs_old
-                    approx_kl = ((torch.exp(log_ratio) - 1) - log_ratio).mean().item()
-                if approx_kl > 1.5 * TARGET_KL:
-                    break
+        rewards_batch_np = np.asarray(rewards_batch, dtype=np.float32)
+        raw_rewards_batch_np = np.asarray(raw_rewards_batch, dtype=np.float32)
 
-        rewards_batch = np.asarray(rewards_batch, dtype=np.float32)
-        raw_rewards_batch = np.asarray(raw_rewards_batch, dtype=np.float32)
-
-        mean_step_reward_norm = float(rewards_batch.mean())
-        mean_step_reward_raw = float(raw_rewards_batch.mean())
+        mean_step_reward_norm = float(rewards_batch_np.mean())
+        mean_step_reward_raw = float(raw_rewards_batch_np.mean())
 
         if ep_info_buffer:
             cov_vals = np.array([ep.get("cov_r", 0.0) for ep in ep_info_buffer], dtype=np.float32)

@@ -140,8 +140,9 @@ class RlEnv(gym.Env):
         else:
             # frontier에서 멀어져 정보가 없는 구간만 탐색하는 것을 억제
             self.no_info_steps += 1
-            # 즉시 소량의 패널티로 "정보 없는 이동"을 덜 선호하게 함
-            reward -= 0.01
+            # 정보 없는 이동이 지속될수록 페널티를 키움
+            stagnation_penalty = 0.01 + 0.002 * min(self.no_info_steps, 20)
+            reward -= stagnation_penalty
             
         # 2. Collision Penalty (Critical)
         if collision or fallen:
@@ -150,19 +151,34 @@ class RlEnv(gym.Env):
             
         # 3. Frontier Penalty (정보를 얻지 못한 상태가 오래 지속될 때 추가 패널티)
         if self.no_info_steps >= 10:
-            reward -= 0.02
+            reward -= 0.02 + 0.002 * (self.no_info_steps - 9)
 
         # 4. Auxiliary Rewards
         # Safety (가장 가까운 장애물까지 거리)
-        dists, _, _ = self.lidar.scan()
         min_dist = np.min(dists) if len(dists) > 0 else 0.0
-        safety_factor = np.clip((min_dist - 0.2) / 0.4, 0.0, 1.0)
+        safety_factor = np.clip((min_dist - 0.3) / 0.6, 0.0, 1.0)
+        clear_factor = 0.0
+        if len(dists) > 0:
+            clear_factor = np.clip((np.mean(dists) - 2.0) / 2.0, 0.0, 1.0)
         
         # Velocity
         vel_factor = v / self.v_fwd
         
-        # 더 적극적인 전진을 유도하기 위해 계수 상향
-        reward += 0.1 * vel_factor * safety_factor
+        # 더 적극적인 전진을 유도하기 위해 계수를 상향하고, 시야가 트인 방향일수록 추가 보상
+        aux_inst = 0.2 * vel_factor * safety_factor + 0.05 * vel_factor * clear_factor
+        reward += aux_inst
+        
+        # 장애물에 너무 가까이 붙으면 패널티
+        if min_dist < 0.4:
+            reward -= 0.05 * (0.4 - min_dist) / 0.4
+        
+        # 막힌 곳에서 회전을 유도
+        turn_strength = abs(w) / self.w_spin if self.w_spin > 0 else 0.0
+        if min_dist < 0.6:
+            if turn_strength > 0.3:
+                reward += 0.02 * turn_strength
+            else:
+                reward -= 0.02 * (0.3 - turn_strength)
         
         # Time Limit
         if self.steps >= self.max_steps:
@@ -171,7 +187,7 @@ class RlEnv(gym.Env):
         # Update Cumulative Rewards (Always add current step's contribution)
         self.episode_cov_reward += (0.1 * new_cells)
         self.episode_col_reward += (-8.0 if (collision or fallen) else 0.0)
-        self.episode_aux_reward += (0.1 * vel_factor * safety_factor)
+        self.episode_aux_reward += aux_inst
         
         # [Logging Info]
         # Monitor Wrapper가 info_keywords에 지정된 키를 찾아서 ep_info에 넣어줌
