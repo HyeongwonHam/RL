@@ -332,7 +332,7 @@ class MazeEnv:
             if event.type == self.pygame.QUIT: self.pygame.quit(); sys.exit()
 
 # ==============================================================================
-# 2. PPO Agent Class (기본 MLP 구조)
+# 2. PPO Agent Class
 # ==============================================================================
 class PPOAgent:
     def __init__(self, state_dim, action_dim, lr=0.0003):
@@ -447,7 +447,7 @@ class PPOAgent:
         print(f"Loaded model from {path}")
 
 # ==============================================================================
-# 3. R-PPO Agent Class (GRU 사용 Recurrent 구조)
+# 3. R-PPO Agent Class
 # ==============================================================================
 class RPPOAgent:
     class RNNModel(nn.Module):
@@ -546,7 +546,7 @@ class RPPOAgent:
         print(f"Loaded model from {path}")
 
 # ==============================================================================
-# 4. History-PPO Agent Class (Frame Stacking)
+# 4. History-PPO Agent Class
 # ==============================================================================
 class HPPOAgent(PPOAgent):
     def __init__(self, state_dim, action_dim, stack=3):
@@ -555,7 +555,7 @@ class HPPOAgent(PPOAgent):
         self.stack = stack
 
 # ==============================================================================
-# 5. CPPO Agent Class (1D CNN + Frame Stacking)
+# 5. CPPO Agent Class
 # ==============================================================================
 class CPPOAgent:
     class CNNActorCritic(nn.Module):
@@ -674,7 +674,6 @@ class CPPOAgent:
         self.old_policy.load_state_dict(self.policy.state_dict())
         for k in self.buffer: self.buffer[k] = []
 
-    # [Added methods to fix AttributeError]
     def save(self, path): 
         torch.save(self.policy.state_dict(), path)
     
@@ -694,7 +693,6 @@ def run_ppo():
         else: print(f"Error: {MODEL_PATH} not found."); return
 
     log_data = []
-    # [수정] global_step 변수 추가 (에피소드 간 누적)
     global_step = 0
     
     for ep in range(TOTAL_EPISODES):
@@ -709,7 +707,6 @@ def run_ppo():
                 agent.rewards.append(reward)
                 agent.is_terminals.append(done)
                 
-                # [수정] steps 대신 global_step 사용, 0일 때 업데이트 방지
                 global_step += 1
                 if global_step % 2048 == 0: 
                     agent.update()
@@ -736,7 +733,6 @@ def run_rppo():
         else: print(f"Error: {MODEL_PATH} not found."); return
 
     log_data = []
-    # [수정] global_step 변수 추가
     global_step = 0
     
     for ep in range(TOTAL_EPISODES):
@@ -750,7 +746,6 @@ def run_rppo():
             if MODE == 'train':
                 agent.buffer['r'].append(reward); agent.buffer['d'].append(done)
                 
-                # [수정] steps 대신 global_step 사용
                 global_step += 1
                 if global_step % 2048 == 0: agent.update()
             state = next_state; score += reward; steps += 1
@@ -773,7 +768,6 @@ def run_hppo():
         else: print(f"Error: {MODEL_PATH} not found."); return
 
     log_data = []
-    # [수정] global_step 변수 추가
     global_step = 0
     
     for ep in range(TOTAL_EPISODES):
@@ -788,7 +782,6 @@ def run_hppo():
             if MODE == 'train':
                 agent.rewards.append(reward); agent.is_terminals.append(done)
                 
-                # [수정] steps 대신 global_step 사용
                 global_step += 1
                 if global_step % 2048 == 0: agent.update()
             queue.append(next_state)
