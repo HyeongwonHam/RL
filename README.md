@@ -1,32 +1,29 @@
 # SLAM을 위한 Mapping 효율 최적화
 
-PPO 기반 알고리즘을 이용하여 에이전트가 센서로 미지의 환경을 효율적으로 탐색하고 지도를 작성하도록 학습하는 프로젝트입니다.
-
-PPO의 부분 관측성 문제를 극복하기 위해 H-PPO(History-PPO), R-PPO(Recurrent-PPO), C-PPO(CNN-PPO)를 구현하고 성능을 비교했습니다.
-
-간단한 2D 환경에서 4가지 알고리즘의 성능을 비교하고, 성능이 우수한 2가지 알고리즘을 복잡한 3D 환경에서 성능을 비교했습니다.
+* PPO 기반 알고리즘을 이용하여 에이전트가 센서로 미지의 환경을 효율적으로 탐색하고 지도를 작성하도록 학습하는 프로젝트입니다.
+* PPO의 부분 관측성 문제를 극복하기 위해 H-PPO(History-PPO), R-PPO(Recurrent-PPO), C-PPO(CNN-PPO)를 구현하고 성능을 비교했습니다.
+* 간단한 2D 환경에서 4가지 알고리즘의 성능을 비교하고, 성능이 우수한 2가지 알고리즘을 복잡한 3D 환경에서 성능을 비교했습니다.
 
 ---
 
 # 2D 환경
 
-## 2D 환경 특징 (Key Features)
+## 특징
 
-* **Lightweight Simulation**: Python과 NumPy 기반의 자체 경량 시뮬레이터를 구축하여 고속 학습 가능.
-* **Procedural Maze Generation**: `Recursive Backtracker` 알고리즘과 개방도(Openness) 계수를 적용하여 매 에피소드마다 새로운 구조의 미로 생성.
-* **Geometric Ray-casting**: 물리 엔진 없이 기하학적 연산만으로 정밀한 2D LiDAR 센서 모델링.
-* **Multi-Model Comparison**: Baseline(PPO)부터 고급 모델(C-PPO, R-PPO)까지 4가지 알고리즘 구현 및 비교.
-
----
+* 간단한 환경으로 시뮬레이터를 구축하여 빠르게 학습할 수 있습니다.
+* 매 에피소드마다 새로운 구조의 개방형 미로를 생성하여 학습 능력을 향상시키고 과적합을 방지합니다.
+* 간단한 PPO, H-PPO부터 상대적으로 복잡한 R-PPO, C-PPO까지 알고리즘을 구현하고 비교합니다.
 
 ## 설치
 
-# 필수 라이브러리 설치
+### 파일 설명
+
+* project.py
+
+### 필수 라이브러리 설치
 ```bash
 pip install numpy torch matplotlib pandas pygame
 ```
-
------
 
 ## 실행 방법
 
