@@ -74,7 +74,7 @@ python plot_results.py
 
 | 알고리즘 | 설명 | 특징 |
 | :--- | :--- | :--- |
-| **PPO** | MLP | Markov property 기반 모델. |
+| **PPO** | MLP | Markov property 기반 모델 |
 | **H-PPO** | Frame stacking | 과거 3개의 프레임을 연결하여 입력한 모델 |
 | **R-PPO** | GRU | GRU를 도입하여 context를 기억하는 모델 |
 | **C-PPO** | 1D CNN | 1D CNN을 사용하여 데이터에서 시공간적 특징 추출한 모델 |
