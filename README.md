@@ -8,6 +8,8 @@
 
 # 2D 환경
 
+* 3D 환경은 [https://github.com/HyeongwonHam/RL/tree/pybullet?tab=readme-ov-file]에서 확인하실 수 있습니다.
+
 ## 특징
 
 * 간단한 환경으로 시뮬레이터를 구축하여 빠르게 학습할 수 있습니다.
