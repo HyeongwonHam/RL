@@ -21,7 +21,6 @@ from main import (
     N_STEPS,
     BATCH_SIZE,
     LR,
-    ENT_COEF,
     CLIP_RANGE,
     N_EPOCHS,
     TARGET_KL,
@@ -32,6 +31,8 @@ from main import (
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 POLICY_MODEL_FILE = "rppo"
+RPPO_HIDDEN_DIM = 384
+RPPO_ENT_COEF = 0.015
 
 
 class CustomCNN(nn.Module):
@@ -76,12 +77,15 @@ class RecurrentPPOPolicy(nn.Module):
         )
         self.hidden_dim = hidden_dim
 
-    def act(self, obs: torch.Tensor, hidden: torch.Tensor):
+    def act(self, obs: torch.Tensor, hidden: torch.Tensor, deterministic: bool = False):
         feats = self.features(obs)
         new_hidden = self.gru_cell(feats, hidden)
         logits = self.pi(new_hidden)
         dist = torch.distributions.Categorical(logits=logits)
-        actions = dist.sample()
+        if deterministic:
+            actions = torch.argmax(logits, dim=-1)
+        else:
+            actions = dist.sample()
         logprobs = dist.log_prob(actions)
         values = self.vf(new_hidden).squeeze(-1)
         return actions, logprobs, values, new_hidden
@@ -150,9 +154,12 @@ def train(args):
     base_channels = obs_shape[0]
     n_actions = 5
 
-    policy = RecurrentPPOPolicy(n_input_channels=base_channels * N_STACK, n_actions=n_actions, features_dim=512).to(
-        device
-    )
+    policy = RecurrentPPOPolicy(
+        n_input_channels=base_channels * N_STACK,
+        n_actions=n_actions,
+        features_dim=512,
+        hidden_dim=RPPO_HIDDEN_DIM,
+    ).to(device)
     optimizer = torch.optim.Adam(policy.parameters(), lr=LR, eps=1e-5)
 
     csv_path = os.path.join(args.output_dir, LOG_FILE)
@@ -298,7 +305,7 @@ def train(args):
 
             value_loss = F.mse_loss(values, b_returns)
 
-            loss = policy_loss + 0.5 * value_loss - ENT_COEF * entropy
+            loss = policy_loss + 0.5 * value_loss - RPPO_ENT_COEF * entropy
 
             optimizer.zero_grad()
             loss.backward()
@@ -364,7 +371,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", type=str, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--total_timesteps", type=int, default=20_000_000)
-    parser.add_argument("--num_envs", type=int, default=4)
+    parser.add_argument("--num_envs", type=int, default=3)
     parser.add_argument("--gui", action="store_true")
     parser.add_argument("--tb_log", type=str, default=None)
     return parser.parse_args()

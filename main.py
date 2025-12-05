@@ -469,7 +469,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir", type=str, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--total_timesteps", type=int, default=20_000_000)
-    parser.add_argument("--num_envs", type=int, default=4)
+    parser.add_argument("--num_envs", type=int, default=3)
     parser.add_argument("--gui", action="store_true")
     parser.add_argument("--tb_log", type=str, default=None)
     return parser.parse_args()

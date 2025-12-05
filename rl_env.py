@@ -45,6 +45,8 @@ class RlEnv(gym.Env):
         self.no_info_steps = 0
         # 리플레이용 로봇 궤적 기록 (grid 좌표 리스트)
         self.path_points = []
+        self.coverage_goal_met = False
+        self.coverage_goal_ratio = 0.45
         
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -82,6 +84,7 @@ class RlEnv(gym.Env):
         self.episode_aux_reward = 0.0
         self.no_info_steps = 0
         self.path_points = []
+        self.coverage_goal_met = False
         
         self.sim.reset()
             
@@ -138,20 +141,18 @@ class RlEnv(gym.Env):
             reward += 0.1 * new_cells
             self.no_info_steps = 0
         else:
-            # frontier에서 멀어져 정보가 없는 구간만 탐색하는 것을 억제
             self.no_info_steps += 1
-            # 정보 없는 이동이 지속될수록 페널티를 키움
-            stagnation_penalty = 0.01 + 0.002 * min(self.no_info_steps, 20)
+            stagnation_penalty = 0.015 + 0.003 * min(self.no_info_steps, 20)
             reward -= stagnation_penalty
             
         # 2. Collision Penalty (Critical)
         if collision or fallen:
-            reward -= 8.0
+            reward -= 10.0
             terminated = True
             
         # 3. Frontier Penalty (정보를 얻지 못한 상태가 오래 지속될 때 추가 패널티)
-        if self.no_info_steps >= 10:
-            reward -= 0.02 + 0.002 * (self.no_info_steps - 9)
+        if self.no_info_steps >= 8:
+            reward -= 0.04 + 0.003 * (self.no_info_steps - 7)
 
         # 4. Auxiliary Rewards
         # Safety (가장 가까운 장애물까지 거리)
@@ -180,6 +181,15 @@ class RlEnv(gym.Env):
             else:
                 reward -= 0.02 * (0.3 - turn_strength)
         
+        # Coverage completion bonus
+        explored_cells = np.count_nonzero(self.mapping.visit_map)
+        total_cells = self.mapping.visit_map.size
+        coverage_ratio = explored_cells / max(total_cells, 1)
+        if not self.coverage_goal_met and coverage_ratio >= self.coverage_goal_ratio:
+            reward += 5.0
+            self.coverage_goal_met = True
+            terminated = True
+
         # Time Limit
         if self.steps >= self.max_steps:
             truncated = True

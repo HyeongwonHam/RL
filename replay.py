@@ -117,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default=None, help="Directory to save replay results (defaults to model directory)")
     parser.add_argument("--model_path", type=str, default=None, help="Path to the trained model file (.pth)")
     parser.add_argument("--gui", action="store_true", default=True, help="Enable GUI visualization")
-    parser.add_argument("--num_episodes", type=int, default=5, help="Number of episodes to replay")
+    parser.add_argument("--num_episodes", type=int, default=20, help="Number of episodes to replay")
     args = parser.parse_args()
 
     replay(args)

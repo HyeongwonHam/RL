@@ -19,7 +19,9 @@ backup/
 *~
 
 # Markdown files
-*.md
+AGENT.md
+CLAUDE.md
+design.md
 
 # Virtual environment
 venv/
