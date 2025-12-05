@@ -1,12 +1,16 @@
-# LiDAR-based Maze Exploration with PPO Variants
+# SLAM을 위한 Mapping 효율 최적화
 
-이 프로젝트는 **강화학습(Reinforcement Learning)**을 이용하여 에이전트가 2D LiDAR 센서 정보만으로 미지(Unknown)의 미로 환경을 효율적으로 탐색하고 지도를 작성(Mapping)하도록 훈련하는 연구입니다.
+PPO 기반 알고리즘을 이용하여 에이전트가 센서로 미지의 환경을 효율적으로 탐색하고 지도를 작성하도록 학습하는 프로젝트입니다.
 
-기본적인 **PPO(Proximal Policy Optimization)** 알고리즘과 부분 관측성(Partially Observable) 문제를 극복하기 위한 **기억 기반 변형 모델(History-PPO, Recurrent-PPO, CNN-PPO)**을 구현하고 성능을 비교 분석했습니다.
+PPO의 부분 관측성 문제를 극복하기 위해 H-PPO(History-PPO), R-PPO(Recurrent-PPO), C-PPO(CNN-PPO)를 구현하고 성능을 비교했습니다.
+
+간단한 2D 환경에서 4가지 알고리즘의 성능을 비교하고, 성능이 우수한 2가지 알고리즘을 복잡한 3D 환경에서 성능을 비교했습니다.
 
 ---
 
-## 📌 주요 특징 (Key Features)
+# 2D 환경
+
+## 2D 환경 특징 (Key Features)
 
 * **Lightweight Simulation**: Python과 NumPy 기반의 자체 경량 시뮬레이터를 구축하여 고속 학습 가능.
 * **Procedural Maze Generation**: `Recursive Backtracker` 알고리즘과 개방도(Openness) 계수를 적용하여 매 에피소드마다 새로운 구조의 미로 생성.
