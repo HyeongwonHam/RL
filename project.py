@@ -674,6 +674,15 @@ class CPPOAgent:
         self.old_policy.load_state_dict(self.policy.state_dict())
         for k in self.buffer: self.buffer[k] = []
 
+    # [Added methods to fix AttributeError]
+    def save(self, path): 
+        torch.save(self.policy.state_dict(), path)
+    
+    def load(self, path):
+        self.policy.load_state_dict(torch.load(path, map_location=device))
+        self.old_policy.load_state_dict(self.policy.state_dict())
+        print(f"Loaded model from {path}")
+
 # ==============================================================================
 # 6. Main Execution Functions
 # ==============================================================================
