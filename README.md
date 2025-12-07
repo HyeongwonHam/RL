@@ -66,7 +66,7 @@ python project.py --algo cppo --mode test --render
 저장된 로그(`logs/`)를 바탕으로 성능 비교 그래프를 생성합니다.
 
 ```bash
-python plot_results.py
+python analysis.py
 ```
 
 실행 후 `plots/` 폴더에 이미지가 저장됩니다.
