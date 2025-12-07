@@ -21,7 +21,7 @@
 | 파일 또는 폴더 | 설명 |
 | :--- | :--- |
 | **[project.py](project.py)** | 메인 실행 파일입니다. state, action, reward, 환경, 학습, 테스트 코드가 모두 포함되어 있습니다. |
-| **[plot_results.py](plot_results.py)** | 결과를 그래프로 도식화하는 파일입니다. 그래프를 `plots/` 폴더에 저장합니다. |
+| **[analysis.py](analysis.py)** | 결과를 그래프로 도식화하는 파일입니다. 그래프를 `plots/` 폴더에 저장합니다. |
 | **[saved_models/](saved_models/)** | 학습된 모델(`.pth`)이 저장되는 폴더입니다. |
 | **[logs/](logs/)** | 에피소드, Return, Coverage, step이 기록된 로그(`.csv`)가 저장되는 폴더입니다. |
 | **[plots/](plots/)** | `plot_results.py` 실행 시 생성된 그래프 이미지가 저장되는 폴더입니다. |
