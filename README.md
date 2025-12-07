@@ -41,6 +41,8 @@ pip install numpy torch matplotlib pandas pygame
 ```bash
 # PPO, H-PPO, R-PPO, C-PPO 중 선택(ppo, hppo, rppo, cppo)
 python project.py --algo ppo --mode train
+python project.py --algo hppo --mode train
+python project.py --algo rppo --mode train
 python project.py --algo cppo --mode train
 ```
 
@@ -53,6 +55,9 @@ python project.py --algo cppo --mode train
 학습된 모델(`saved_models/`)을 불러와 성능을 테스트합니다.
 
 ```bash
+python project.py --algo ppo --mode test --render
+python project.py --algo hppo --mode test --render
+python project.py --algo rppo --mode test --render
 python project.py --algo cppo --mode test --render
 ```
 
