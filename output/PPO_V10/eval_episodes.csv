@@ -1,0 +1,2 @@
+episode,steps,total_reward,cov_reward,col_reward,aux_reward,coverage_per_step,aux_per_step,collisions
+1,1857,964.0961226004084,564.7000000000093,0.0,417.2901226003974,0.3040926225094288,0.22471196693613216,0.0

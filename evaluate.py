@@ -11,7 +11,7 @@ import cv2
 
 from rl_env import RlEnv
 from main import PPOPolicy, N_STACK as N_STACK_PPO
-from main_rppo import RecurrentPPOPolicy, N_STACK as N_STACK_RPPO
+from main_rppo import RecurrentPPOPolicy, N_STACK as N_STACK_RPPO, RPPO_HIDDEN_DIM
 
 
 def load_training_log(run_dir, last_k=50):
@@ -111,6 +111,7 @@ def _eval_worker(algo, run_dir, eval_dir, start_episode, num_episodes, device_st
             n_input_channels=base_channels * n_stack,
             n_actions=n_actions,
             features_dim=512,
+            hidden_dim=RPPO_HIDDEN_DIM,
         ).to(device)
 
     state_dict = torch.load(model_path, map_location=device)

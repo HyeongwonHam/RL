@@ -1,0 +1,7 @@
+Episode Evaluation Summary
+Metric,C-PPO,R-PPO
+coverage_per_step,0.3041,0.5898
+aux_per_step,0.2247,0.2421
+collisions,0.0000,1.0000
+steps,1857.0000,615.0000
+total_reward,964.0961,492.5544

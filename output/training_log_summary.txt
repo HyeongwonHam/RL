@@ -1,0 +1,9 @@
+Training Log Summary (Last Window)
+Metric,C-PPO,R-PPO
+reward_mean_raw,0.5078,0.6638
+cov_rew_mean,377.3294,363.2491
+col_rew_mean,-7.3600,-7.6160
+aux_rew_mean,153.0068,140.3244
+ep_len_mean,928.7856,706.9430
+cov_per_step_mean,4.0395,3.2908
+aux_per_step_mean,0.1557,0.1905
